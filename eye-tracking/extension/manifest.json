@@ -1,0 +1,56 @@
+{
+  "manifest_version": 2,
+  "name": "EyeTrax Dwell Capture Prototype",
+  "version": "0.1.0",
+  "description": "Firefox MV2 prototype for EyeTrax-driven gaze dwell screenshots.",
+  "applications": {
+    "gecko": {
+      "id": "eyetrax-dwell-capture@example.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "downloads",
+    "<all_urls>",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "scripts": [
+      "shared/browserAdapter.js",
+      "shared/messages.js",
+      "shared/config.js",
+      "shared/storage.js",
+      "tracking/calibrationSession.js",
+      "tracking/eyetraxBridge.js",
+      "background/capturePipeline.js",
+      "background/background.js"
+    ],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "EyeTrax Capture",
+    "default_popup": "ui/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "shared/browserAdapter.js",
+        "shared/messages.js",
+        "shared/config.js",
+        "content/dwellEngine.js",
+        "content/roiManager.js",
+        "content/overlayManager.js",
+        "content/contentScript.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:8765 ws://localhost:8765;"
+}

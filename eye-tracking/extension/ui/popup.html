@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EyeTrax Capture</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <div class="shell">
+      <div class="ambient ambient-a"></div>
+      <div class="ambient ambient-b"></div>
+
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Firefox MV2 Prototype</p>
+          <h1>EyeTrax Dwell Capture</h1>
+          <p class="hero-copy">Local EyeTrax bridge, 2 second anchored gaze capture, viewport crop pipeline.</p>
+        </div>
+        <div class="hero-status" id="heroStatus">Disconnected</div>
+      </header>
+
+      <section class="panel stack">
+        <label class="toggle-card">
+          <div>
+            <div class="card-title">Tracking Enabled</div>
+            <div class="card-copy">Master switch for EyeTrax input, dwell tracking, and screenshot capture.</div>
+          </div>
+          <span class="toggle">
+            <input id="trackingEnabled" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="toggle-card">
+          <div>
+            <div class="card-title">Show Visual Overlay</div>
+            <div class="card-copy">Hide only the in-page reticle and debug anchor boxes without stopping capture logic.</div>
+          </div>
+          <span class="toggle">
+            <input id="overlayEnabled" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </section>
+
+      <section class="panel grid">
+        <label class="field">
+          <span>Filter Mode</span>
+          <select id="filterMode">
+            <option value="kalman_ema">Kalman + EMA</option>
+            <option value="kalman">Kalman</option>
+            <option value="none">None</option>
+            <option value="kde">KDE</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Calibration</span>
+          <select id="calibrationMode">
+            <option value="9p">9 point</option>
+            <option value="5p">5 point</option>
+            <option value="lissajous">Lissajous</option>
+            <option value="dense">Dense grid</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Cooldown (ms)</span>
+          <input id="cooldownMs" type="number" min="250" step="250">
+        </label>
+
+        <label class="field">
+          <span>EMA Alpha</span>
+          <input id="emaAlpha" type="number" min="0" max="1" step="0.05">
+        </label>
+
+        <label class="field">
+          <span>KDE Confidence</span>
+          <input id="kdeConfidence" type="number" min="0.05" max="0.99" step="0.05">
+        </label>
+
+        <label class="field">
+          <span>Camera Index</span>
+          <input id="cameraIndex" type="number" min="0" step="1">
+        </label>
+      </section>
+
+      <section class="panel stack compact">
+        <label class="toggle-row">
+          <span>Debug Overlay</span>
+          <span class="toggle slim">
+            <input id="debugEnabled" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="toggle-row">
+          <span>Save Full Screenshot</span>
+          <span class="toggle slim">
+            <input id="saveFullScreenshot" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="toggle-row">
+          <span>Save Metadata JSON</span>
+          <span class="toggle slim">
+            <input id="saveMetadata" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </section>
+
+      <section class="panel actions">
+        <button class="button primary" id="recalibrateButton" type="button">Run Calibration</button>
+        <button class="button ghost" id="reconnectButton" type="button">Reconnect Bridge</button>
+      </section>
+
+      <section class="panel status-grid">
+        <div class="status-item">
+          <span class="status-label">Companion</span>
+          <span class="status-value" id="companionStatus">Disconnected</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Calibration</span>
+          <span class="status-value" id="calibrationStatus">Required</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Tracking</span>
+          <span class="status-value" id="trackingStatus">Stopped</span>
+        </div>
+        <div class="status-item status-item-wide">
+          <span class="status-label">Last Error</span>
+          <span class="status-value error-text" id="errorText">None</span>
+        </div>
+      </section>
+    </div>
+
+    <script src="../shared/browserAdapter.js"></script>
+    <script src="../shared/messages.js"></script>
+    <script src="../shared/config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
