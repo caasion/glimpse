@@ -20,7 +20,7 @@ async function uploadImage(imageUrl) {
 function generateSmartCroppedUrl(publicId, options = {}) {
   return cloudinary.url(publicId, {
     crop: "auto",
-    gravity: "auto:whisk",
+    gravity: "auto:utensil",
     width: options.width || 300,
     height: options.height || 300,
     quality: "100",
