@@ -3,16 +3,31 @@
   "name": "iTrack",
   "version": "1.0.0",
   "description": "Product panel for Instagram: recommended and overall products in a right-side panel.",
-  "permissions": ["activeTab"],
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "<all_urls>",
+    "https://api.cloudinary.com/*",
+    "https://res.cloudinary.com/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*",
+    "http://localhost:3000/*"
+  ],
   "browser_specific_settings": {
     "gecko": {
       "id": "itrack@hack-canada.local",
       "strict_min_version": "91.0"
     }
   },
+  "background": {
+    "scripts": ["background.js"]
+  },
   "content_scripts": [
     {
-      "matches": ["*://*.instagram.com/*"],
+      "matches": [
+        "*://instagram.com/*",
+        "*://*.instagram.com/*"
+      ],
       "js": ["content.js"],
       "css": ["panel.css"],
       "run_at": "document_idle"

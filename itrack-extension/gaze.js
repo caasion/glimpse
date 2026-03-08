@@ -1,14 +1,14 @@
-/**
- * iTrack gaze relay script – runs inside gaze-page.html (moz-extension:// page).
+﻿/**
+ * iTrack gaze relay script - runs inside gaze-page.html (moz-extension:// page).
  *
  * Initialises EyeGesturesLite using the webcam, runs the built-in calibration
  * sequence, and forwards every gaze sample to the parent Instagram page via
  * postMessage so the content script can do hit-testing on product tiles.
  *
  * Mode messages (ITRACK_SET_MODE) from the content script control visibility:
- *   calibration – white background, cursor + calibration dots visible
- *   dev         – transparent background, gaze cursor visible
- *   normal      – transparent background, cursor hidden (tracking in background)
+ *   calibration - white background, cursor + calibration dots visible
+ *   dev         - transparent background, gaze cursor visible
+ *   normal      - transparent background, cursor hidden (tracking in background)
  */
 
 // Holds the mode requested before gestures are ready (CDN scripts may still be loading)
@@ -45,8 +45,8 @@ window.addEventListener("load", function () {
 
   /**
    * Called on every processed frame.
-   * @param {[number, number]} point  – [x, y] gaze position in viewport pixels
-   * @param {boolean} calibration     – true while calibration is in progress
+   * @param {[number, number]} point  - [x, y] gaze position in viewport pixels
+   * @param {boolean} calibration     - true while calibration is in progress
    */
   function onGaze(point, calibration) {
     window.parent.postMessage(
