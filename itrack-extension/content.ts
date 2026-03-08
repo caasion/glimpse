@@ -3,6 +3,11 @@
  * Injects a right-side panel on Instagram with Recommended products (top) and All products (bottom).
  * Clicking a product tile redirects to its link immediately in a new tab.
  * Removes Instagram Reels nav buttons, Messages toolbar, and floating buttons dynamically.
+ *
+ * Eye-gaze integration via EyeGesturesLite:
+ * A hidden moz-extension iframe (gaze-page.html) runs EyeGesturesLite and relays
+ * gaze coordinates here via postMessage. When the gaze dwells on a product tile
+ * for DWELL_THRESHOLD_MS milliseconds, a POST is sent to GAZE_API_ENDPOINT.
  */
 
 interface Product {
@@ -27,8 +32,26 @@ const MOCK_ALL: Product[] = [
   { id: "all-3", name: "Smart Water Bottle", shortDescription: "Tracks intake, glows on schedule", imageUrl: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=280&h=280&fit=crop", price: "$59", url: "https://example.com/smart-bottle", kind: "all" },
 ];
 
-const PANEL_ID = "itrack-panel";
-const REOPEN_ID = "itrack-reopen-pill";
+const PANEL_ID    = "itrack-panel";
+const REOPEN_ID   = "itrack-reopen-pill";
+const GAZE_IFRAME_ID = "itrack-gaze-iframe";
+
+/** Replace with your real API endpoint. */
+const GAZE_API_ENDPOINT = "http://localhost:3000/api/gaze";
+
+/** Milliseconds a gaze must stay on a tile before the POST fires. */
+const DWELL_THRESHOLD_MS = 1500;
+
+// ---------------------------------------------------------------------------
+// Dwell state
+// ---------------------------------------------------------------------------
+interface DwellState {
+  tileId: string | null;
+  timerId: ReturnType<typeof setTimeout> | null;
+  startTime: number;
+}
+
+const dwell: DwellState = { tileId: null, timerId: null, startTime: 0 };
 
 function isInstagram(): boolean {
   return window.location.hostname.includes("instagram.com");
@@ -76,7 +99,10 @@ function attachImageFallback(img: HTMLImageElement): void {
 function renderTile(container: HTMLElement, product: Product): void {
   const tile = document.createElement("div");
   tile.className = "itrack-tile";
-  tile.setAttribute("data-product-id", product.id);
+  tile.setAttribute("data-product-id",    product.id);
+  tile.setAttribute("data-product-name",  product.name);
+  tile.setAttribute("data-product-url",   product.url);
+  tile.setAttribute("data-product-price", product.price ?? "");
   const priceHtml = product.price ? ` <span class="itrack-tile-price">${escapeHtml(product.price)}</span>` : "";
   tile.innerHTML = `
     <div class="itrack-tile-media">
@@ -140,10 +166,134 @@ function createPanel(): void {
   createReopenPill();
 }
 
+// ---------------------------------------------------------------------------
+// Gaze iframe injection
+// ---------------------------------------------------------------------------
+function injectGazeIframe(): void {
+  if (document.getElementById(GAZE_IFRAME_ID)) return;
+  const iframe = document.createElement("iframe");
+  iframe.id  = GAZE_IFRAME_ID;
+  // browser.runtime.getURL is available in content scripts in Firefox MV2
+  iframe.src = (globalThis as any).browser.runtime.getURL("gaze-page.html");
+  // Zero-size, fully transparent – EyeGesturesLite renders its own overlay
+  // inside the iframe's own document (moz-extension:// origin).
+  iframe.style.cssText = [
+    "position:fixed",
+    "top:0","left:0",
+    "width:100vw","height:100vh",
+    "border:none",
+    "background:transparent",
+    "pointer-events:none",
+    `z-index:${2147483645}`,
+    "opacity:1",
+  ].join(";");
+  // Allow the iframe to use the camera
+  iframe.allow = "camera";
+  document.body.appendChild(iframe);
+}
+
+// ---------------------------------------------------------------------------
+// Gaze hit-testing
+// ---------------------------------------------------------------------------
+function getGazedTile(x: number, y: number): HTMLElement | null {
+  const tiles = document.querySelectorAll<HTMLElement>(".itrack-tile");
+  for (const tile of Array.from(tiles)) {
+    const r = tile.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      return tile;
+    }
+  }
+  return null;
+}
+
+function clearDwell(): void {
+  if (dwell.timerId !== null) {
+    clearTimeout(dwell.timerId);
+    dwell.timerId = null;
+  }
+  if (dwell.tileId) {
+    const prev = document.querySelector<HTMLElement>(`[data-product-id="${dwell.tileId}"]`);
+    if (prev) {
+      prev.classList.remove("itrack-tile--gaze-active");
+      prev.style.removeProperty("--dwell-progress");
+    }
+  }
+  dwell.tileId  = null;
+  dwell.startTime = 0;
+}
+
+function fireDwellPost(
+  tileEl: HTMLElement,
+  dwellMs: number,
+  gazeX: number,
+  gazeY: number
+): void {
+  const body = {
+    productId:    tileEl.dataset.productId    ?? "",
+    productName:  tileEl.dataset.productName  ?? "",
+    productUrl:   tileEl.dataset.productUrl   ?? "",
+    productPrice: tileEl.dataset.productPrice ?? "",
+    gazeX,
+    gazeY,
+    dwellDuration: dwellMs,
+  };
+  fetch(GAZE_API_ENDPOINT, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  }).catch(err => console.warn("[iTrack] gaze POST failed:", err));
+}
+
+// ---------------------------------------------------------------------------
+// Gaze message handler (called on each postMessage from gaze-page.html)
+// ---------------------------------------------------------------------------
+function handleGazeMessage(event: MessageEvent): void {
+  // Only accept messages from our own extension
+  if (!event.origin.startsWith("moz-extension://")) return;
+
+  const data = event.data as { type?: string; x?: number; y?: number; calibrated?: boolean };
+  if (data?.type !== "ITRACK_GAZE") return;
+
+  const { x, y, calibrated } = data;
+  if (typeof x !== "number" || typeof y !== "number") return;
+  // Skip frames during calibration – gaze is not yet reliable
+  if (!calibrated) return;
+
+  const tile = getGazedTile(x, y);
+  const tileId = tile?.dataset.productId ?? null;
+
+  if (tileId !== dwell.tileId) {
+    // Gaze moved to a different tile (or off all tiles)
+    clearDwell();
+    if (tile && tileId) {
+      dwell.tileId    = tileId;
+      dwell.startTime = Date.now();
+      tile.classList.add("itrack-tile--gaze-active");
+      dwell.timerId = setTimeout(() => {
+        const el = document.querySelector<HTMLElement>(`[data-product-id="${tileId}"]`);
+        if (el) {
+          fireDwellPost(el, DWELL_THRESHOLD_MS, x, y);
+          // Flash the tile to confirm the dwell fired
+          el.classList.add("itrack-tile--dwell-fired");
+          setTimeout(() => el.classList.remove("itrack-tile--dwell-fired"), 600);
+        }
+        clearDwell();
+      }, DWELL_THRESHOLD_MS);
+    }
+  } else if (tile && tileId) {
+    // Still dwelling on same tile – update CSS progress variable
+    const elapsed  = Date.now() - dwell.startTime;
+    const progress = Math.min(elapsed / DWELL_THRESHOLD_MS, 1);
+    tile.style.setProperty("--dwell-progress", String(progress));
+  }
+}
+
 function init(): void {
   if (!isInstagram()) return;
   if (document.getElementById(PANEL_ID)) return;
   createPanel();
+  injectGazeIframe();
+  window.addEventListener("message", handleGazeMessage);
 }
 
 if (document.readyState === "loading") {

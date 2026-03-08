@@ -17,5 +17,10 @@
       "css": ["panel.css"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "web_accessible_resources": [
+    "gaze-page.html",
+    "gaze.js"
+  ],
+  "content_security_policy": "script-src 'self' 'unsafe-eval' https://eyegestures.com https://www.lactame.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; object-src 'self';"
 }

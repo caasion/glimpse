@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>iTrack Gaze</title>
+  <!-- EyeGesturesLite CSS (calibration dot + cursor styles) -->
+  <link rel="stylesheet" href="https://eyegestures.com/eyegestures.css" />
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <!-- EyeGesturesLite requires a video element for the camera feed -->
+  <video id="video" width="640" height="480" autoplay style="display:none;"></video>
+  <!-- Status/error divs required by the library (can stay invisible) -->
+  <div id="status" style="display:none;">Initializing...</div>
+  <div id="error"  style="display:none;"></div>
+
+  <!-- External ML dependencies required by EyeGesturesLite -->
+  <script src="https://www.lactame.com/lib/ml/6.0.0/ml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+
+  <!-- EyeGesturesLite core library -->
+  <script src="https://eyegestures.com/eyegestures.js"></script>
+
+  <!-- iTrack gaze relay script -->
+  <script src="gaze.js"></script>
+</body>
+</html>
