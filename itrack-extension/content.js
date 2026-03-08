@@ -10,6 +10,7 @@
  * gaze coordinates here via postMessage. When the gaze dwells on a product tile
  * for DWELL_THRESHOLD_MS milliseconds, a POST is sent to GAZE_API_ENDPOINT.
  */
+var _a, _b, _c, _d, _e;
 const MOCK_RECOMMENDED = [
     { id: "rec-1", name: "Pegasus Runner", shortDescription: "Lightweight road-running shoe", imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=280&h=280&fit=crop", price: "$120", url: "https://example.com/pegasus-runner", kind: "recommended" },
     { id: "rec-2", name: "Studio Headphones", shortDescription: "Noise-cancelling over-ear", imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=280&h=280&fit=crop", price: "$349", url: "https://example.com/studio-headphones", kind: "recommended" },
@@ -29,6 +30,12 @@ const ANCHOR_PROGRESS_ID = "itrack-anchor-progress";
 const AUTO_CAPTURE_TOGGLE_ID = "itrack-auto-capture-toggle";
 const AUTO_CAPTURE_STATUS_ID = "itrack-auto-capture-status";
 const DEV_ACTIONS_ROW_ID = "itrack-dev-actions-row";
+const PANEL_IFRAME_ID = "itrack-panel-iframe";
+/** Current product lists sent to the React panel iframe. */
+let panelProducts = {
+    recommended: MOCK_RECOMMENDED,
+    all: MOCK_ALL,
+};
 /** Replace with your real API endpoint. */
 const GAZE_API_ENDPOINT = "http://localhost:3000/api/gaze";
 /** Milliseconds a gaze must stay on a tile before the POST fires. */
@@ -80,9 +87,9 @@ function moveGazeDot(x, y) {
 }
 function updateProductSectionVisibility() {
     const hideSections = gazeMode === "calibration";
-    document.querySelectorAll(`#${PANEL_ID} .itrack-section`).forEach((section) => {
-        section.style.display = hideSections ? "none" : "";
-    });
+    const panelIframe = document.getElementById(PANEL_IFRAME_ID);
+    if (panelIframe)
+        panelIframe.style.display = hideSections ? "none" : "";
 }
 function updateDevActionsVisibility() {
     const actionsRow = document.getElementById(DEV_ACTIONS_ROW_ID);
@@ -101,10 +108,6 @@ function updateDevActionsVisibility() {
 function setGazeMode(mode) {
     var _a;
     gazeMode = mode;
-    // Update active-button highlight
-    document.querySelectorAll(".itrack-gaze-btn").forEach(btn => {
-        btn.classList.toggle("itrack-gaze-btn--active", btn.dataset.mode === mode);
-    });
     // Show the native gaze dot only in dev mode.
     showGazeDot(mode === "dev");
     syncAnchorBoxVisibility();
@@ -135,7 +138,29 @@ function setGazeMode(mode) {
     // Tell the iframe so it can show/hide the cursor and set background colour
     (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: "ITRACK_SET_MODE", mode }, "*");
 }
-const dwell = { tileId: null, timerId: null, startTime: 0 };
+// ---------------------------------------------------------------------------
+// Extension messaging – allow popup to get/set gaze mode
+// ---------------------------------------------------------------------------
+const itrackRuntime = (_d = (_b = (_a = globalThis.browser) === null || _a === void 0 ? void 0 : _a.runtime) !== null && _b !== void 0 ? _b : (_c = globalThis.chrome) === null || _c === void 0 ? void 0 : _c.runtime) !== null && _d !== void 0 ? _d : null;
+if ((_e = itrackRuntime === null || itrackRuntime === void 0 ? void 0 : itrackRuntime.onMessage) === null || _e === void 0 ? void 0 : _e.addListener) {
+    itrackRuntime.onMessage.addListener((message) => {
+        if (!message || typeof message.type !== "string") {
+            return undefined;
+        }
+        if (message.type === "ITRACK_GET_MODE") {
+            return Promise.resolve({ mode: gazeMode });
+        }
+        if (message.type === "ITRACK_SET_MODE") {
+            const mode = message.mode;
+            if (mode === "calibration" || mode === "dev" || mode === "normal") {
+                setGazeMode(mode);
+                return Promise.resolve({ ok: true });
+            }
+            return Promise.resolve({ ok: false, error: "INVALID_MODE" });
+        }
+        return undefined;
+    });
+}
 const autoCapture = {
     enabled: true,
     anchorTimerId: null,
@@ -565,11 +590,46 @@ function renderBackendTile(container, product, index) {
 }
 /** (Re-)populates the Recommended section from a live backend response. */
 function updateRecommendedTiles(picks) {
-    const container = document.getElementById("itrack-recommended-tiles");
-    if (!container)
+    panelProducts = {
+        ...panelProducts,
+        recommended: picks.map((p, i) => {
+            var _a;
+            return ({
+                id: `rec-${i}`,
+                name: p.name,
+                shortDescription: (_a = p.brand) !== null && _a !== void 0 ? _a : "",
+                imageUrl: p.image_url,
+                price: p.price,
+                url: p.buy_url,
+                kind: "recommended",
+            });
+        }),
+    };
+    sendPanelData();
+}
+function createPanelIframe(parent) {
+    if (document.getElementById(PANEL_IFRAME_ID))
         return;
-    container.innerHTML = "";
-    picks.forEach((product, i) => renderBackendTile(container, product, i));
+    const iframe = document.createElement("iframe");
+    iframe.id = PANEL_IFRAME_ID;
+    iframe.src = globalThis.browser.runtime.getURL("panel/panel.html");
+    iframe.setAttribute("allowTransparency", "true");
+    iframe.style.cssText = [
+        "width:100%",
+        "flex:1 1 0",
+        "min-height:0",
+        "border:none",
+        "background:transparent",
+        "overflow:hidden",
+    ].join(";");
+    iframe.addEventListener("load", () => sendPanelData(), { once: true });
+    parent.appendChild(iframe);
+}
+function sendPanelData() {
+    const iframe = document.getElementById(PANEL_IFRAME_ID);
+    if (!(iframe === null || iframe === void 0 ? void 0 : iframe.contentWindow))
+        return;
+    iframe.contentWindow.postMessage({ type: "ITRACK_PANEL_DATA", payload: panelProducts }, "*");
 }
 function createSection(parent, title, products, containerId) {
     const section = document.createElement("div");
@@ -597,26 +657,6 @@ function createReopenPill() {
         }
     });
     document.body.appendChild(pill);
-}
-function createGazeControls(parent) {
-    const bar = document.createElement("div");
-    bar.className = "itrack-gaze-controls";
-    const modes = [
-        { mode: "calibration", label: "Calibrate", title: "Show calibration overlay" },
-        { mode: "dev", label: "Dev", title: "Show gaze cursor (transparent)" },
-        { mode: "normal", label: "Normal", title: "Run tracking silently" },
-    ];
-    modes.forEach(({ mode, label, title }) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "itrack-gaze-btn" + (mode === gazeMode ? " itrack-gaze-btn--active" : "");
-        btn.dataset.mode = mode;
-        btn.textContent = label;
-        btn.title = title;
-        btn.addEventListener("click", () => setGazeMode(mode));
-        bar.appendChild(btn);
-    });
-    parent.appendChild(bar);
 }
 function createImageUploadControl(parent) {
     if (document.getElementById("imageFile"))
@@ -707,9 +747,7 @@ function createPanel() {
     createImageUploadControl(actionsRow);
     createAutoCaptureControl(actionsRow);
     updateDevActionsVisibility();
-    createGazeControls(content);
-    createSection(content, "Recommended products", MOCK_RECOMMENDED, "itrack-recommended-tiles");
-    createSection(content, "All products", MOCK_ALL, "itrack-all-tiles");
+    createPanelIframe(content);
     updateProductSectionVisibility();
     createReopenPill();
 }
@@ -746,55 +784,19 @@ function injectGazeIframe() {
     document.body.appendChild(iframe);
 }
 // ---------------------------------------------------------------------------
-// Gaze hit-testing
+// Gaze: forward to React panel iframe; dwell POST fired when panel reports ITRACK_DWELL_FIRED
 // ---------------------------------------------------------------------------
-function getGazedTile(x, y) {
-    const tiles = document.querySelectorAll(".itrack-tile");
-    for (const tile of Array.from(tiles)) {
-        const r = tile.getBoundingClientRect();
-        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-            return tile;
-        }
-    }
-    return null;
-}
-function clearDwell() {
-    if (dwell.timerId !== null) {
-        clearTimeout(dwell.timerId);
-        dwell.timerId = null;
-    }
-    if (dwell.tileId) {
-        const prev = document.querySelector(`[data-product-id="${dwell.tileId}"]`);
-        if (prev) {
-            prev.classList.remove("itrack-tile--gaze-active");
-            prev.style.removeProperty("--dwell-progress");
-        }
-    }
-    dwell.tileId = null;
-    dwell.startTime = 0;
-}
-function fireDwellPost(tileEl, dwellMs, gazeX, gazeY) {
-    var _a, _b, _c, _d;
-    const body = {
-        productId: (_a = tileEl.dataset.productId) !== null && _a !== void 0 ? _a : "",
-        productName: (_b = tileEl.dataset.productName) !== null && _b !== void 0 ? _b : "",
-        productUrl: (_c = tileEl.dataset.productUrl) !== null && _c !== void 0 ? _c : "",
-        productPrice: (_d = tileEl.dataset.productPrice) !== null && _d !== void 0 ? _d : "",
-        gazeX,
-        gazeY,
-        dwellDuration: dwellMs,
-    };
+function fireDwellPost(payload) {
     fetch(GAZE_API_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
     }).catch(err => console.warn("[iTrack] gaze POST failed:", err));
 }
 // ---------------------------------------------------------------------------
 // Gaze message handler (called on each postMessage from gaze-page.html)
 // ---------------------------------------------------------------------------
 function handleGazeMessage(event) {
-    var _a;
     // Only accept messages from our own extension
     if (!event.origin.startsWith("moz-extension://"))
         return;
@@ -804,43 +806,26 @@ function handleGazeMessage(event) {
     const { x, y, calibrated } = data;
     if (typeof x !== "number" || typeof y !== "number")
         return;
-    // Move the native gaze dot in dev mode so the cursor is visible even while
-    // calibration is still in progress (useful for debugging gaze accuracy).
     if (gazeMode === "dev")
         moveGazeDot(x, y);
-    // Skip frames during calibration – gaze is not yet reliable for dwell
     if (!calibrated) {
         observeAutoCaptureGaze(x, y, false);
         return;
     }
     observeAutoCaptureGaze(x, y, true);
-    const tile = getGazedTile(x, y);
-    const tileId = (_a = tile === null || tile === void 0 ? void 0 : tile.dataset.productId) !== null && _a !== void 0 ? _a : null;
-    if (tileId !== dwell.tileId) {
-        // Gaze moved to a different tile (or off all tiles)
-        clearDwell();
-        if (tile && tileId) {
-            dwell.tileId = tileId;
-            dwell.startTime = Date.now();
-            tile.classList.add("itrack-tile--gaze-active");
-            dwell.timerId = setTimeout(() => {
-                const el = document.querySelector(`[data-product-id="${tileId}"]`);
-                if (el) {
-                    fireDwellPost(el, DWELL_THRESHOLD_MS, x, y);
-                    // Flash the tile to confirm the dwell fired
-                    el.classList.add("itrack-tile--dwell-fired");
-                    setTimeout(() => el.classList.remove("itrack-tile--dwell-fired"), 600);
-                }
-                clearDwell();
-            }, DWELL_THRESHOLD_MS);
-        }
+    // Forward gaze to React panel iframe for card hit-testing and dwell
+    const panelIframe = document.getElementById(PANEL_IFRAME_ID);
+    if (panelIframe === null || panelIframe === void 0 ? void 0 : panelIframe.contentWindow) {
+        panelIframe.contentWindow.postMessage({ type: "ITRACK_GAZE", x, y, calibrated }, "*");
     }
-    else if (tile && tileId) {
-        // Still dwelling on same tile – update CSS progress variable
-        const elapsed = Date.now() - dwell.startTime;
-        const progress = Math.min(elapsed / DWELL_THRESHOLD_MS, 1);
-        tile.style.setProperty("--dwell-progress", String(progress));
-    }
+}
+function handlePanelMessage(event) {
+    if (!event.origin.startsWith("moz-extension://"))
+        return;
+    const data = event.data;
+    if ((data === null || data === void 0 ? void 0 : data.type) !== "ITRACK_DWELL_FIRED" || !data.payload)
+        return;
+    fireDwellPost(data.payload);
 }
 function init() {
     if (!isInstagram())
@@ -853,6 +838,7 @@ function init() {
     injectGazeIframe();
     watchForImageInput();
     window.addEventListener("message", handleGazeMessage);
+    window.addEventListener("message", handlePanelMessage);
 }
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
@@ -862,14 +848,8 @@ else {
 }
 window.addEventListener("itrack-products", ((e) => {
     const { recommended, all } = e.detail || { recommended: [], all: [] };
-    const recContainer = document.getElementById("itrack-recommended-tiles");
-    const allContainer = document.getElementById("itrack-all-tiles");
-    if (!recContainer || !allContainer)
-        return;
-    recContainer.innerHTML = "";
-    allContainer.innerHTML = "";
-    recommended.forEach(p => renderTile(recContainer, p));
-    all.forEach(p => renderTile(allContainer, p));
+    panelProducts = { recommended: recommended || [], all: all || [] };
+    sendPanelData();
 }));
 const DEFAULT_CLOUDINARY_CLOUD_NAME = "";
 const DEFAULT_CLOUDINARY_UPLOAD_PRESET = "";

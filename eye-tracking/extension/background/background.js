@@ -18,7 +18,11 @@
     lastError: null,
     activeTabId: null,
     activeWindowId: null,
-    pageContexts: {}
+    pageContexts: {},
+    screenWidth: 1920,
+    screenHeight: 1200,
+    customCalibrationTargets: null,
+    customCalibrationIndex: 0
   };
 
   var bridge = null;
@@ -29,7 +33,9 @@
       calibration: storage.clone(state.calibration),
       bridgeStatus: state.bridgeStatus,
       trackingActive: state.trackingActive,
-      lastError: state.lastError
+      lastError: state.lastError,
+      screenWidth: state.screenWidth,
+      screenHeight: state.screenHeight
     };
   }
 
@@ -207,6 +213,65 @@
     return getSnapshot();
   }
 
+  function buildCustomCalibrationTargets() {
+    var w = state.screenWidth;
+    var h = state.screenHeight;
+    var m = 0.15;
+    return [
+      { x: Math.round(w / 2), y: Math.round(h / 2) },
+      { x: Math.round(w * m), y: Math.round(h * m) },
+      { x: Math.round(w * (1 - m)), y: Math.round(h * m) },
+      { x: Math.round(w * m), y: Math.round(h * (1 - m)) },
+      { x: Math.round(w * (1 - m)), y: Math.round(h * (1 - m)) },
+      { x: Math.round(w / 2), y: Math.round(h * m) },
+      { x: Math.round(w / 2), y: Math.round(h * (1 - m)) },
+      { x: Math.round(w * m), y: Math.round(h / 2) },
+      { x: Math.round(w * (1 - m)), y: Math.round(h / 2) }
+    ];
+  }
+
+  async function handleCustomCalibrationRequest() {
+    if (!await ensureBridgeConnected()) {
+      return { ok: false, snapshot: getSnapshot() };
+    }
+
+    state.customCalibrationTargets = buildCustomCalibrationTargets();
+    state.customCalibrationIndex = 0;
+
+    state.calibration = await storage.saveCalibrationState({
+      status: config.CALIBRATION_STATUSES.RUNNING,
+      mode: "custom",
+      lastCompletedAt: state.calibration.lastCompletedAt,
+      modelFile: state.calibration.modelFile,
+      sampleCount: null
+    });
+    await stopTracking();
+    await broadcastSessionState();
+
+    try {
+      var first = state.customCalibrationTargets[0];
+      await bridge.startCollectTarget({
+        target_x: first.x,
+        target_y: first.y,
+        duration_ms: 2000,
+        camera_index: state.settings.cameraIndex
+      });
+      return { ok: true, snapshot: getSnapshot() };
+    } catch (error) {
+      state.customCalibrationTargets = null;
+      state.lastError = error.message;
+      state.calibration = await storage.saveCalibrationState({
+        status: config.CALIBRATION_STATUSES.ERROR,
+        mode: "custom",
+        lastCompletedAt: state.calibration.lastCompletedAt,
+        modelFile: state.calibration.modelFile,
+        sampleCount: null
+      });
+      await broadcastSessionState();
+      return { ok: false, snapshot: getSnapshot() };
+    }
+  }
+
   async function handleCalibrationRequest() {
     if (!await ensureBridgeConnected()) {
       return {
@@ -273,6 +338,13 @@
       return;
     }
 
+    if (typeof payload.screen_width === "number") {
+      state.screenWidth = payload.screen_width;
+    }
+    if (typeof payload.screen_height === "number") {
+      state.screenHeight = payload.screen_height;
+    }
+
     if (payload.calibrated) {
       state.calibration = await storage.saveCalibrationState({
         status: config.CALIBRATION_STATUSES.READY,
@@ -326,12 +398,16 @@
         });
         break;
       case bridgeEvents.CALIBRATION_COMPLETED:
+        state.customCalibrationTargets = null;
+        state.customCalibrationIndex = 0;
         state.calibration = await storage.saveCalibrationState({
           status: config.CALIBRATION_STATUSES.READY,
           mode: message.payload && message.payload.mode || state.settings.calibrationMode,
           lastCompletedAt: message.payload && message.payload.completed_at || new Date().toISOString(),
           modelFile: message.payload && message.payload.model_file || state.settings.modelFile,
-          sampleCount: message.payload && message.payload.sample_count != null ? message.payload.sample_count : null
+          sampleCount: message.payload && message.payload.sample_count != null ? message.payload.sample_count : null,
+          validationMeanErrorPx: message.payload && message.payload.validation_mean_error_px != null ? message.payload.validation_mean_error_px : null,
+          validationReady: message.payload && message.payload.validation_ready != null ? message.payload.validation_ready : true
         });
         if (message.payload && message.payload.model_file) {
           state.settings = await storage.saveSettings(Object.assign({}, state.settings, {
@@ -355,6 +431,26 @@
           payload: message.payload
         });
         return;
+      case bridgeEvents.COLLECT_TARGET_DONE:
+        if (message.payload && message.payload.success && state.customCalibrationTargets && state.customCalibrationIndex < state.customCalibrationTargets.length) {
+          state.customCalibrationIndex += 1;
+          if (state.customCalibrationIndex < state.customCalibrationTargets.length) {
+            var next = state.customCalibrationTargets[state.customCalibrationIndex];
+            await bridge.startCollectTarget({
+              target_x: next.x,
+              target_y: next.y,
+              duration_ms: 2000,
+              camera_index: state.settings.cameraIndex
+            });
+          } else {
+            await bridge.fitCalibrationModel({
+              model_file: state.settings.modelFile || null
+            });
+            state.customCalibrationTargets = null;
+            state.customCalibrationIndex = 0;
+          }
+        }
+        break;
       case bridgeEvents.ERROR:
         state.lastError = message.payload && message.payload.message || "EyeTrax bridge error.";
         if (message.payload && message.payload.scope === "calibration") {
@@ -432,6 +528,8 @@
         return handleSettingsUpdate(message.payload);
       case messages.START_CALIBRATION:
         return handleCalibrationRequest();
+      case messages.START_CUSTOM_CALIBRATION:
+        return handleCustomCalibrationRequest();
       case messages.RECONNECT_BRIDGE:
         return reconnectBridge();
       case messages.CONTENT_READY:
@@ -450,6 +548,16 @@
 
   function registerListeners() {
     browserApi.runtime.onMessage.addListener(handleRuntimeMessage);
+
+    if (browserApi.commands && typeof browserApi.commands.onCommand !== "undefined") {
+      browserApi.commands.onCommand.addListener(function (command) {
+        if (command === "recalibrate") {
+          handleCalibrationRequest().catch(function (err) {
+            console.warn("Recalibrate shortcut failed", err);
+          });
+        }
+      });
+    }
 
     browserApi.tabs.onActivated.addListener(function (activeInfo) {
       state.activeTabId = activeInfo.tabId;

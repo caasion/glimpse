@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iTrack</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="itrack-popup-shell">
+      <header class="itrack-popup-header">
+        <span class="itrack-popup-title">iTrack</span>
+        <span class="itrack-popup-subtitle">Gaze mode</span>
+      </header>
+      <main class="itrack-popup-main">
+        <label class="itrack-popup-field">
+          <span class="itrack-popup-label">Mode</span>
+          <select id="gazeModeSelect">
+            <option value="calibration">Calibrate</option>
+            <option value="dev">Dev</option>
+            <option value="normal">Normal</option>
+          </select>
+        </label>
+        <p id="itrackPopupStatus" class="itrack-popup-status"></p>
+      </main>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
+

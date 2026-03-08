@@ -82,9 +82,11 @@
 
   function toViewportPoint(sample) {
     var origin = getViewportOrigin();
+    var offsetX = Number(session.settings.gazeOffsetX) || 0;
+    var offsetY = Number(session.settings.gazeOffsetY) || 0;
     return {
-      x: Math.round(sample.x - origin.x),
-      y: Math.round(sample.y - origin.y)
+      x: Math.round(sample.x - origin.x - offsetX),
+      y: Math.round(sample.y - origin.y - offsetY)
     };
   }
 

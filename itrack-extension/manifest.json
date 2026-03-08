@@ -22,6 +22,10 @@
   "background": {
     "scripts": ["background.js"]
   },
+  "browser_action": {
+    "default_title": "iTrack",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": [

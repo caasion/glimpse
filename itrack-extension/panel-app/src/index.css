@@ -1,0 +1,198 @@
+/* iTrack Panel – transparent app background, dark cards per reference */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-y: hidden !important;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+.itrack-panel-app {
+  background: transparent !important;
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 8px 10px 8px;
+  border-radius: 12px;
+  min-width: 200px;
+  max-width: 100vw;
+  overflow-y: hidden;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.itrack-section-row {
+  flex: 0 0 auto;
+  margin-bottom: 6px;
+}
+
+.itrack-section-row:last-child {
+  margin-bottom: 0;
+}
+
+.itrack-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #000;
+  margin: 0 0 4px 0;
+  text-align: left;
+  display: block;
+  line-height: 1.2;
+}
+
+.itrack-cards-row {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  /* Stretch scroll track edge-to-edge inside padded panel */
+  margin: 0 -10px;
+  padding: 0 10px 4px;
+  /* Mild fade at left/right edges so scroll feels less sharp */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 10px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 10px,
+    black calc(100% - 10px),
+    transparent 100%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.itrack-cards-row::-webkit-scrollbar {
+  height: 4px;
+}
+
+.itrack-cards-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+
+/* Product card – 65% of 288×224 (~187×146), same aspect ratio */
+.itrack-card {
+  position: relative;
+  flex: 0 0 187px;
+  width: 187px;
+  height: 146px;
+  min-width: 187px;
+  min-height: 146px;
+  max-width: 187px;
+  max-height: 146px;
+  cursor: pointer;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #1c1c1e;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+}
+
+.itrack-card:hover .itrack-card-media img {
+  transform: scale(1.06);
+}
+
+.itrack-card-media {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #1c1c1e;
+}
+
+.itrack-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+.itrack-card-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.18) 0%,
+    rgba(0, 0, 0, 0.4) 40%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
+}
+
+.itrack-card-price {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: #82c464;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.itrack-card-name {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  pointer-events: none;
+}
+
+/* Gaze states (content script adds these classes) */
+.itrack-card.itrack-card--gaze-active {
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.6);
+  --dwell-progress: 0;
+}
+
+.itrack-card.itrack-card--gaze-active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: calc(var(--dwell-progress, 0) * 100%);
+  border-radius: 2px;
+  background: rgba(6, 182, 212, 0.9);
+  transition: width 0.08s linear;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.itrack-card.itrack-card--dwell-fired {
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.8);
+}

@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: #0b1120;
+  color: #e5e7eb;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+
+.itrack-popup-shell {
+  min-width: 260px;
+  max-width: 320px;
+  padding: 12px 14px 14px;
+}
+
+.itrack-popup-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.itrack-popup-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.itrack-popup-subtitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: #f9fafb;
+}
+
+.itrack-popup-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.itrack-popup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.itrack-popup-label {
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+#gazeModeSelect {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 12px;
+  outline: none;
+}
+
+#gazeModeSelect:focus-visible {
+  border-color: rgba(56, 189, 248, 0.9);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
+}
+
+.itrack-popup-status {
+  min-height: 1em;
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.itrack-popup-status--error {
+  color: #fecaca;
+}
+

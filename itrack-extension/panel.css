@@ -3,11 +3,11 @@
 .itrack-panel {
   position: fixed;
   top: 50%;
-  right: 50px;
-  width: 340px;
+  right: 0 !important;
+  width: 400px;
   max-width: 92vw;
-  height: auto; /* shrink to fit content */
-  max-height: 90vh; /* optional: prevent it from being too tall */
+  height: auto;
+  max-height: 90vh;
   background: transparent;
   color: #111827;
   z-index: 2147483647;
@@ -16,8 +16,8 @@
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   pointer-events: none;
-
-  transform: translateY(-50%); /* vertically center */
+  transform: translateY(-50%);
+  border-radius: 12px 0 0 12px; /* flush right edge to screen */
 }
 
 .itrack-panel > * {
@@ -54,110 +54,17 @@
   overflow: hidden; /* parent itself doesn’t scroll */
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
-/* SECTIONS */
-
-.itrack-section {
-  margin-bottom: 18px;
-  position: relative;
-}
-
-.itrack-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 14px;
-}
-
-/* PRODUCT LIST */
-
-.itrack-tiles {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-height: calc(56px * 4 + 72px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  position: relative;
-  justify-content: flex-start;
-  padding-bottom: 16px; /* give space for fade */
-}
-
-/* hide scrollbars for clean look */
-.itrack-tiles::-webkit-scrollbar {
-  width: 0px;
+/* React panel iframe – height fits both sections (h1 + 224px cards ×2 + padding), no vertical scroll */
+.itrack-panel-iframe {
+  flex: 0 0 auto;
+  height: 530px;
+  width: 100%;
+  border: none;
+  border-radius: 12px 0 0 12px;
   background: transparent;
-}
-
-/* TOP & BOTTOM FADE – ONLY ON TILES */
-.itrack-tiles::before,
-.itrack-tiles::after {
-  content: "";
-  position: sticky;
-  left: 0;
-  right: 0;
-  height: 30px;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.itrack-tiles::before {
-  top: 0;
-  background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%);
-}
-
-.itrack-tiles::after {
-  bottom: 0;
-  background: linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%);
-}
-
-/* PRODUCT TILE */
-
-.itrack-tile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 11px;
-  background: #f1f5f9;
-  border-radius: 10px;
-  border: 1px solid rgba(15,23,42,0.12);
-  box-shadow: 0 2px 8px rgba(15,23,42,0.08);
-  cursor: pointer;
-}
-
-.itrack-tile:hover {
-  transform: translateY(-1px);
-  border-color: rgba(15,23,42,0.24);
-  box-shadow: 0 6px 16px rgba(15,23,42,0.2);
-}
-
-/* IMAGE */
-
-.itrack-tile-media img {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 10px;
-}
-
-/* TEXT */
-
-.itrack-tile-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 10px;
-}
-
-.itrack-tile-name {
-  grid-column: 1 / -1;
-  font-weight: 600;
-}
-
-.itrack-tile-price {
-  font-size: 12px;
-  color: rgba(15,23,42,0.7);
-  font-weight: 600;
 }
 
 /* REOPEN BUTTON */
@@ -186,85 +93,4 @@
   display: none;
 }
 
-.itrack-section-title {
-  font-size: 1.25rem;   /* Increase this value for bigger text */
-  font-weight: 700;     /* Make it bolder if desired */
-  color: #111827;
-  margin: 0 0 0 0;
-  text-align: left;
-  display: block;
-}
-
-/* ─── GAZE MODE CONTROLS ────────────────────────────────────────────────── */
-
-.itrack-gaze-controls {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.itrack-gaze-btn {
-  flex: 1;
-  padding: 5px 0;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid rgba(15,23,42,0.18);
-  border-radius: 6px;
-  background: rgba(241,245,249,0.8);
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.itrack-gaze-btn:hover {
-  background: rgba(226,232,240,0.9);
-  border-color: rgba(15,23,42,0.3);
-}
-
-.itrack-gaze-btn--active {
-  background: rgba(6,182,212,0.15);
-  border-color: rgba(6,182,212,0.6);
-  color: #0e7490;
-}
-
-/* ─── EYE-GAZE HIGHLIGHT ─────────────────────────────────────────────────── */
-
-/*
- * Applied while the gaze is resting on a tile.
- * --dwell-progress (0→1) is set via JS every frame to drive the progress bar.
- */
-.itrack-tile--gaze-active {
-  border-color: rgba(6, 182, 212, 0.7);  /* cyan */
-  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35), 0 4px 16px rgba(6, 182, 212, 0.25);
-  transform: translateY(-1px) scale(1.01);
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
-  /* progress bar width driven by the JS-set custom property */
-  --dwell-progress: 0;
-}
-
-/* Dwell progress bar rendered as a pseudo-element at the tile bottom */
-.itrack-tile--gaze-active::after {
-  content: "";
-  display: block;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  border-radius: 0 0 10px 10px;
-  background: rgba(6, 182, 212, 0.85);
-  width: calc(var(--dwell-progress, 0) * 100%);
-  transition: width 0.08s linear;
-  pointer-events: none;
-}
-
-/* Give the tile `position: relative` so the pseudo-element is contained */
-.itrack-tile {
-  position: relative;
-}
-
-/* Brief flash/pulse when the dwell POST fires */
-.itrack-tile--dwell-fired {
-  border-color: rgba(6, 182, 212, 1);
-  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.6), 0 6px 20px rgba(6, 182, 212, 0.4);
-  transition: border-color 0.1s, box-shadow 0.1s;
-}
+/* Gaze/dwell styling is in the React panel (panel-app) .itrack-card--gaze-active etc. */

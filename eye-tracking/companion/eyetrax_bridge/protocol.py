@@ -13,6 +13,8 @@ CLIENT_MESSAGE_TYPES = {
     "load_model",
     "save_model",
     "ping",
+    "start_collect_target",
+    "fit_calibration_model",
 }
 
 SERVER_EVENT_TYPES = {
@@ -23,6 +25,8 @@ SERVER_EVENT_TYPES = {
     "tracking_started",
     "tracking_stopped",
     "gaze_sample",
+    "validation_target",
+    "collect_target_done",
     "error",
     "pong",
 }

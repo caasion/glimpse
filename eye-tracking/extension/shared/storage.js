@@ -47,7 +47,16 @@
       modelFile: String(source.modelFile || ""),
       bridgeUrl: String(source.bridgeUrl || config.DEFAULT_SETTINGS.bridgeUrl),
       autoReconnectBridge: Boolean(source.autoReconnectBridge),
-      kalmanTuneEnabled: Boolean(source.kalmanTuneEnabled)
+      kalmanTuneEnabled: Boolean(source.kalmanTuneEnabled),
+      driftMaxVelocity: Math.round(clampNumber(source.driftMaxVelocity, 0, 2000, config.DEFAULT_SETTINGS.driftMaxVelocity)),
+      driftMedianWindow: Math.round(clampNumber(source.driftMedianWindow, 1, 31, config.DEFAULT_SETTINGS.driftMedianWindow)),
+      driftDeadZone: Math.round(clampNumber(source.driftDeadZone, 0, 100, config.DEFAULT_SETTINGS.driftDeadZone)),
+      antiJerkEnabled: Boolean(source.antiJerkEnabled),
+      gazeOffsetX: Math.round(clampNumber(source.gazeOffsetX, -500, 500, config.DEFAULT_SETTINGS.gazeOffsetX)),
+      gazeOffsetY: Math.round(clampNumber(source.gazeOffsetY, -500, 500, config.DEFAULT_SETTINGS.gazeOffsetY)),
+      validationEnabled: Boolean(source.validationEnabled !== false),
+      validationDurationPerTargetSec: clampNumber(source.validationDurationPerTargetSec, 0.5, 5, config.DEFAULT_SETTINGS.validationDurationPerTargetSec),
+      validationThresholdPx: Math.round(clampNumber(source.validationThresholdPx, 10, 500, config.DEFAULT_SETTINGS.validationThresholdPx))
     };
   }
 
