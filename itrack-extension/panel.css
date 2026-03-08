@@ -60,11 +60,12 @@
 /* React panel iframe – height fits both sections (h1 + 224px cards ×2 + padding), no vertical scroll */
 .itrack-panel-iframe {
   flex: 0 0 auto;
-  height: 530px;
+  height: 120px;
   width: 100%;
   border: none;
   border-radius: 16px;
   background: transparent;
+  display: block;
 }
 
 /* REOPEN BUTTON */

@@ -33,6 +33,8 @@ const ANCHOR_PROGRESS_ID = "itrack-anchor-progress";
 const AUTO_CAPTURE_TOGGLE_ID = "itrack-auto-capture-toggle";
 const AUTO_CAPTURE_STATUS_ID = "itrack-auto-capture-status";
 const DEV_ACTIONS_ROW_ID = "itrack-dev-actions-row";
+const PANEL_IFRAME_MIN_HEIGHT_PX = 80;
+const PANEL_IFRAME_MAX_HEIGHT_PX = 620;
 
 /** Replace with your real API endpoint. */
 const GAZE_API_ENDPOINT = "http://localhost:3000/api/gaze";
@@ -308,6 +310,16 @@ function relayGazeToPanelIframe(x: number, y: number, calibrated: boolean): void
     },
     "*",
   );
+}
+
+function applyPanelIframeHeight(heightPx: number): void {
+  const iframe = getPanelIframe();
+  if (!iframe) return;
+  const clamped = Math.max(
+    PANEL_IFRAME_MIN_HEIGHT_PX,
+    Math.min(PANEL_IFRAME_MAX_HEIGHT_PX, Math.round(heightPx)),
+  );
+  iframe.style.height = `${clamped}px`;
 }
 
 function injectAnchorBox(): void {
@@ -849,6 +861,7 @@ function createPanel(): void {
   panelIframe.id = PANEL_IFRAME_ID;
   panelIframe.className = "itrack-panel-iframe";
   panelIframe.setAttribute("title", "iTrack products");
+  panelIframe.setAttribute("allowTransparency", "true");
   const fallbackToLegacy = () => {
     if (panelIframeLoaded) return;
     panelIframe.remove();
@@ -1035,6 +1048,13 @@ function handleWindowMessage(event: MessageEvent): void {
   }
   if (data.type === "ITRACK_DWELL_FIRED") {
     handlePanelDwellMessage(event);
+    return;
+  }
+  if (data.type === "ITRACK_PANEL_RESIZE") {
+    const resizeData = event.data as { height?: unknown };
+    if (typeof resizeData.height === "number" && Number.isFinite(resizeData.height)) {
+      applyPanelIframeHeight(resizeData.height);
+    }
   }
 }
 function init(): void {

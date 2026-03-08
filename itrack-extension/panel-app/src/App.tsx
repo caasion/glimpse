@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { OfferCarousel, type Offer } from "@/components/ui/offer-carousel";
 import { GlassFilter } from "@/components/ui/liquid-glass";
 import type { PanelData, Product } from "./types";
@@ -39,6 +39,7 @@ export default function App() {
   const [gazedCardId, setGazedCardId] = useState<string | null>(null);
   const [dwellProgress, setDwellProgress] = useState(0);
   const dwellStartRef = useRef<number>(0);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Listen for product data from content script (when running inside extension iframe)
   useEffect(() => {
@@ -124,10 +125,36 @@ export default function App() {
     }
   }, [gazedCardId, dwellProgress]);
 
+  useLayoutEffect(() => {
+    const sendSize = () => {
+      const appEl = panelRef.current;
+      if (!appEl) return;
+      const measured = Math.ceil(Math.max(appEl.scrollHeight, appEl.getBoundingClientRect().height));
+      window.parent.postMessage(
+        {
+          type: "ITRACK_PANEL_RESIZE",
+          height: measured,
+        },
+        "*",
+      );
+    };
+
+    sendSize();
+    const raf = requestAnimationFrame(sendSize);
+    const resizeObserver = new ResizeObserver(() => sendSize());
+    if (panelRef.current) resizeObserver.observe(panelRef.current);
+    window.addEventListener("resize", sendSize);
+    return () => {
+      cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", sendSize);
+    };
+  }, [data]);
+
   return (
     <>
       <GlassFilter />
-      <div className="itrack-panel-app">
+      <div ref={panelRef} className="itrack-panel-app">
         <OfferCarousel title="From Video" offers={toOffers(data.recommended)} />
         <OfferCarousel title="Curated For You" offers={toOffers(data.all)} />
       </div>
