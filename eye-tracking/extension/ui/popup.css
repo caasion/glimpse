@@ -248,7 +248,27 @@ body {
 
 .actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
+}
+
+.actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.action-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.55));
+}
+
+.action-hint kbd {
+  font-family: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .button {

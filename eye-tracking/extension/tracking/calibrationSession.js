@@ -13,7 +13,10 @@
         rows: settings.denseRows,
         cols: settings.denseCols,
         margin_ratio: settings.denseMargin
-      }
+      },
+      validation_enabled: settings.validationEnabled !== false,
+      validation_duration_per_target_sec: settings.validationDurationPerTargetSec,
+      validation_threshold_px: settings.validationThresholdPx
     };
   }
 
@@ -25,7 +28,11 @@
       filter_mode: settings.filterMode,
       ema_alpha: settings.emaAlpha,
       kde_confidence: settings.kdeConfidence,
-      kalman_tune_enabled: settings.kalmanTuneEnabled
+      kalman_tune_enabled: settings.kalmanTuneEnabled,
+      drift_max_velocity: settings.driftMaxVelocity,
+      drift_median_window: settings.driftMedianWindow,
+      drift_dead_zone: settings.driftDeadZone,
+      anti_jerk_enabled: settings.antiJerkEnabled === true
     };
   }
 
@@ -38,7 +45,11 @@
       "emaAlpha",
       "kdeConfidence",
       "bridgeUrl",
-      "kalmanTuneEnabled"
+      "kalmanTuneEnabled",
+      "driftMaxVelocity",
+      "driftMedianWindow",
+      "driftDeadZone",
+      "antiJerkEnabled"
     ];
 
     return keys.some(function (key) {

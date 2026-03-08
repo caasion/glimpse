@@ -201,6 +201,14 @@
     return this.send(bridgeMessages.LOAD_MODEL, payload);
   };
 
+  EyeTraxBridge.prototype.startCollectTarget = function startCollectTarget(payload) {
+    return this.send(bridgeMessages.START_COLLECT_TARGET, payload);
+  };
+
+  EyeTraxBridge.prototype.fitCalibrationModel = function fitCalibrationModel(payload) {
+    return this.send(bridgeMessages.FIT_CALIBRATION_MODEL, payload);
+  };
+
   namespace.tracking = namespace.tracking || {};
   namespace.tracking.EyeTraxBridge = EyeTraxBridge;
 })(typeof globalThis !== "undefined" ? globalThis : this);

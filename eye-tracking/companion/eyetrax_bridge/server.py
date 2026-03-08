@@ -110,6 +110,15 @@ class EyeTraxBridgeServer:
 
             if message_type == "ping":
                 await websocket.send(encode_message("pong", {"timestamp": payload.get("timestamp")}))
+                return
+
+            if message_type == "start_collect_target":
+                self.service.start_collect_target(payload)
+                return
+
+            if message_type == "fit_calibration_model":
+                self.service.fit_calibration_model(payload)
+                return
         except Exception as exc:  # pragma: no cover - manually exercised
             await websocket.send(
                 encode_message("error", {"scope": "bridge", "message": str(exc)})

@@ -28,8 +28,10 @@ That preserves the EyeTrax workflow instead of replacing it with a different bro
 
 ### Calibration workflow
 
-- Default calibration mode: `9p`
-- Other supported modes: `5p`, `lissajous`, `dense`
+- Default calibration mode: `9p+dense` (recommended for best accuracy: 9-point then dense grid)
+- Other supported modes: `9p`, `5p`, `lissajous`, `dense`, `9p+dense`
+- Dense grid defaults to 7×7 for better spatial coverage
+- After calibration, a short validation pass runs (5 targets); mean error is shown in the popup as "Calibration quality"; if above threshold, "re-calibrate recommended" is shown
 - Calibration is started from the popup
 - The current prototype lets the EyeTrax companion own the actual calibration window, so calibration still follows EyeTrax's native flow closely
 - Calibrated models are persisted to `companion/models/eyetrax_latest.pkl` by default
@@ -149,10 +151,11 @@ If the bridge starts without EyeTrax installed, it now fails lazily with an expl
 ### 3. Calibrate
 
 1. Open the popup
-2. Choose calibration mode if needed
+2. Use default **9p+dense** (recommended) or choose another calibration mode
 3. Click `Run Calibration`
-4. Follow the EyeTrax calibration window
-5. After calibration completes, enable tracking
+4. Follow the EyeTrax calibration window, then the validation targets (look at each dot)
+5. Check "Calibration quality" in the popup; re-calibrate if it shows "re-calibrate recommended"
+6. After calibration completes, enable tracking
 
 ### 4. Use dwell capture
 

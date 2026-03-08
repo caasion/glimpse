@@ -35,6 +35,15 @@
     "default_title": "EyeTrax Capture",
     "default_popup": "ui/popup.html"
   },
+  "commands": {
+    "recalibrate": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "Recalibrate eye tracking (stops tracking, runs calibration, then resumes if tracking was on)"
+    }
+  },
   "content_scripts": [
     {
       "matches": [

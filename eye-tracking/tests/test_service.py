@@ -123,6 +123,7 @@ class ServiceTests(unittest.TestCase):
                     "camera_index": 2,
                     "model_name": "ridge",
                     "model_file": str(model_file),
+                    "validation_enabled": False,
                 }
             )
 
@@ -147,6 +148,7 @@ class ServiceTests(unittest.TestCase):
                         "cols": 6,
                         "margin_ratio": 0.18,
                     },
+                    "validation_enabled": False,
                 }
             )
 
@@ -154,6 +156,28 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(dense_call[2]["rows"], 7)
         self.assertEqual(dense_call[2]["cols"], 6)
         self.assertEqual(dense_call[2]["margin_ratio"], 0.18)
+
+    def test_run_calibration_9p_dense_runs_both_flows(self) -> None:
+        calls: list[tuple] = []
+        runtime = build_runtime(calls)
+        service = EyeTraxBridgeService(lambda *_: None, runtime_provider=lambda: runtime)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service._run_calibration(
+                {
+                    "mode": "9p+dense",
+                    "model_file": str(Path(temp_dir) / "combo.pkl"),
+                    "dense": {"rows": 7, "cols": 7, "margin_ratio": 0.1},
+                    "validation_enabled": False,
+                }
+            )
+
+        nine_calls = [c for c in calls if c[0] == "9p"]
+        dense_calls = [c for c in calls if c[0] == "dense"]
+        self.assertEqual(len(nine_calls), 1)
+        self.assertEqual(len(dense_calls), 1)
+        self.assertEqual(dense_calls[0][2]["rows"], 7)
+        self.assertEqual(dense_calls[0][2]["cols"], 7)
 
     def test_start_tracking_requires_loaded_or_calibrated_model(self) -> None:
         calls: list[tuple] = []

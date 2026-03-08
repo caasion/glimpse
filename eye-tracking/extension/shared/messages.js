@@ -14,7 +14,8 @@
       GAZE_SAMPLE: "GAZE_SAMPLE",
       DWELL_TRIGGER: "DWELL_TRIGGER",
       CAPTURE_COMPLETED: "CAPTURE_COMPLETED",
-      CAPTURE_FAILED: "CAPTURE_FAILED"
+      CAPTURE_FAILED: "CAPTURE_FAILED",
+      START_CUSTOM_CALIBRATION: "START_CUSTOM_CALIBRATION"
     },
     BRIDGE_MESSAGE_TYPES: {
       HELLO: "hello",
@@ -24,7 +25,9 @@
       STOP_TRACKING: "stop_tracking",
       LOAD_MODEL: "load_model",
       SAVE_MODEL: "save_model",
-      PING: "ping"
+      PING: "ping",
+      START_COLLECT_TARGET: "start_collect_target",
+      FIT_CALIBRATION_MODEL: "fit_calibration_model"
     },
     BRIDGE_EVENT_TYPES: {
       BRIDGE_READY: "bridge_ready",
@@ -34,6 +37,8 @@
       TRACKING_STARTED: "tracking_started",
       TRACKING_STOPPED: "tracking_stopped",
       GAZE_SAMPLE: "gaze_sample",
+      VALIDATION_TARGET: "validation_target",
+      COLLECT_TARGET_DONE: "collect_target_done",
       ERROR: "error",
       PONG: "pong"
     }
