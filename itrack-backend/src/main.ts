@@ -39,6 +39,14 @@ try {
   app.log.info(`iTrack backend running - sourcing: ${settings.PRODUCT_SOURCING_MODE}`);
   app.log.info(
     {
+      backboard_base_url: settings.BACKBOARD_BASE_URL,
+      backboard_api_key_configured: Boolean(settings.BACKBOARD_API_KEY),
+      backboard_debug_logging_enabled: settings.DEBUG,
+    },
+    "Backboard runtime config",
+  );
+  app.log.info(
+    {
       cloudinary_enabled: settings.CLOUDINARY_ENABLED,
       cloudinary_cloud_name_configured: Boolean(settings.CLOUDINARY_CLOUD_NAME),
       cloudinary_upload_preset_configured: Boolean(settings.CLOUDINARY_UPLOAD_PRESET),
