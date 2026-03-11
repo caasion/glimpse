@@ -15,7 +15,7 @@ const stringToBoolTrueDefault = z
 export const SettingsSchema = z.object({
   GEMINI_API_KEY: z.string().min(1),
   BACKBOARD_API_KEY: z.string().min(1),
-  BACKBOARD_BASE_URL: z.string().url().default("https://api.backboard.io"),
+  BACKBOARD_BASE_URL: z.string().url().default("https://app.backboard.io/api"),
   SERPAPI_KEY: z.string().min(1),
   CLOUDINARY_CLOUD_NAME: z.string().min(1),
   CLOUDINARY_API_KEY: z.string().min(1),

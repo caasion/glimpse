@@ -38,6 +38,7 @@ export interface SessionState {
   recent_dwells: SessionDwell[];
   session_rejections: string[];
   dwell_count: number;
+  seen_product_names: Set<string>;
 }
 
 // ---- Constants ----
@@ -47,18 +48,33 @@ const SKIP_INCREMENT = 0.15;
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 const SESSION_MAX_DWELLS = 20;
 const BACKBOARD_TIMEOUT_MS = 5000;
+const BACKBOARD_LLM_TIMEOUT_MS = 20000; // LLM calls take longer
 const BACKBOARD_NETWORK_ERROR_CODES = new Set(["ENOTFOUND", "ECONNREFUSED", "ECONNRESET"]);
+
+// ---- Backboard AI Memory API ----
+const BACKBOARD_APP_URL = "https://app.backboard.io/api";
+const BACKBOARD_ASSISTANT_NAME = "iTrack Fashion Tracker";
+const BACKBOARD_ASSISTANT_SYSTEM_PROMPT = `You are iTrack's fashion taste memory system. You observe what products users gaze at or skip while browsing online and remember their fashion preferences.
+
+When a user shares a product observation (gazed at or skipped), briefly acknowledge it. Your key job is to extract and REMEMBER the relevant fashion signals.
+
+When asked to summarize the user's fashion taste profile as JSON, respond with ONLY a valid JSON object — no other text before or after — in exactly this format:
+{"preferred_styles":{"label":score},"preferred_colors":{"label":score},"preferred_brands":{"label":score},"price_min":0,"price_max":300,"price_confidence":0.0,"rejected_styles":{"label":score},"rejected_brands":{"label":score}}
+
+All scores are between 0.0 and 1.0. Base them on the actual browsing history you remember. If no history exists yet, return sensible fashion defaults with low scores (0.2–0.3).`;
 
 // ---- In-memory state ----
 
 const storedProfileCache = new Map<string, StoredProfile>();
 const sessionCache = new Map<string, SessionState>();
 const dwellCounts = new Map<string, number>();
+let cachedAssistantId: string | null = null;
+const threadIdCache = new Map<string, string>(); // userId -> Backboard thread_id
 
 // ---- Helpers ----
 
-const authHeaders = (): HeadersInit => ({
-  Authorization: `Bearer ${settings.BACKBOARD_API_KEY}`,
+const apiHeaders = (): HeadersInit => ({
+  "X-API-Key": settings.BACKBOARD_API_KEY,
   "Content-Type": "application/json",
 });
 
@@ -125,6 +141,121 @@ const logBackboardWarn = (message: string, meta?: Record<string, unknown>): void
   console.warn(`[Backboard] ${message}`);
 };
 
+// ---- Backboard AI Memory API helpers ----
+
+const ensureAssistant = async (): Promise<string | null> => {
+  if (cachedAssistantId) return cachedAssistantId;
+  try {
+    const listResp = await fetch(`${BACKBOARD_APP_URL}/assistants`, {
+      headers: apiHeaders(),
+      signal: AbortSignal.timeout(BACKBOARD_TIMEOUT_MS),
+    });
+    if (listResp.ok) {
+      const data = await listResp.json() as { assistants?: Array<{ assistant_id: string; name: string }> };
+      const existing = (data.assistants ?? []).find((a) => a.name === BACKBOARD_ASSISTANT_NAME);
+      if (existing) {
+        cachedAssistantId = existing.assistant_id;
+        logBackboardInfo("Found existing Backboard assistant", { assistant_id: cachedAssistantId });
+        return cachedAssistantId;
+      }
+    }
+    const createResp = await fetch(`${BACKBOARD_APP_URL}/assistants`, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({ name: BACKBOARD_ASSISTANT_NAME, system_prompt: BACKBOARD_ASSISTANT_SYSTEM_PROMPT }),
+      signal: AbortSignal.timeout(BACKBOARD_TIMEOUT_MS),
+    });
+    if (createResp.ok) {
+      const created = await createResp.json() as { assistant_id: string };
+      cachedAssistantId = created.assistant_id;
+      logBackboardInfo("Created Backboard assistant", { assistant_id: cachedAssistantId });
+      return cachedAssistantId;
+    }
+  } catch (err) {
+    logBackboardWarn("ensureAssistant failed", errorToLogMeta(err));
+  }
+  return null;
+};
+
+const ensureThread = async (userId: string): Promise<string | null> => {
+  const cached = threadIdCache.get(userId);
+  if (cached) return cached;
+  const assistantId = await ensureAssistant();
+  if (!assistantId) return null;
+  try {
+    const resp = await fetch(`${BACKBOARD_APP_URL}/assistants/${assistantId}/threads`, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(BACKBOARD_TIMEOUT_MS),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { thread_id: string };
+      threadIdCache.set(userId, data.thread_id);
+      logBackboardInfo("Created Backboard thread for user", { user_id: sanitizeUserId(userId), thread_id: data.thread_id });
+      return data.thread_id;
+    }
+  } catch (err) {
+    logBackboardWarn("ensureThread failed", { user_id: sanitizeUserId(userId), ...errorToLogMeta(err) });
+  }
+  return null;
+};
+
+// Fire-and-forget: post a natural language observation to Backboard's memory system.
+// Backboard's LLM reads the message and automatically extracts taste signals into persistent memory.
+const logObservation = (userId: string, content: string): void => {
+  ensureThread(userId)
+    .then((threadId) => {
+      if (!threadId) return;
+      logBackboardInfo("Logging observation to Backboard memory", { user_id: sanitizeUserId(userId) });
+      return fetch(`${BACKBOARD_APP_URL}/threads/${threadId}/messages`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ content, memory: "Auto", stream: false }),
+        signal: AbortSignal.timeout(BACKBOARD_LLM_TIMEOUT_MS),
+      });
+    })
+    .catch((err) => {
+      logBackboardWarn("logObservation failed", { user_id: sanitizeUserId(userId), ...errorToLogMeta(err) });
+    });
+};
+
+// Query Backboard's memory for a structured taste profile summary.
+const queryTasteProfile = async (userId: string): Promise<StoredProfile | null> => {
+  const threadId = await ensureThread(userId);
+  if (!threadId) return null;
+  try {
+    const resp = await fetch(`${BACKBOARD_APP_URL}/threads/${threadId}/messages`, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        content: 'Summarize this user\'s current fashion taste profile as JSON. Return ONLY a valid JSON object, no other text: {"preferred_styles":{},"preferred_colors":{},"preferred_brands":{},"price_min":0,"price_max":300,"price_confidence":0,"rejected_styles":{},"rejected_brands":{}}',
+        memory: "Readonly",
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(BACKBOARD_LLM_TIMEOUT_MS),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as { content?: string };
+    if (!data.content) return null;
+    const jsonMatch = data.content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = PersistentProfileSchema.safeParse(JSON.parse(jsonMatch[0]));
+    if (parsed.success) {
+      logBackboardInfo("queryTasteProfile: Backboard returned structured profile", {
+        user_id: sanitizeUserId(userId),
+        style_count: Object.keys(parsed.data.preferred_styles).length,
+        color_count: Object.keys(parsed.data.preferred_colors).length,
+        brand_count: Object.keys(parsed.data.preferred_brands).length,
+      });
+      return { persistent: parsed.data, observations: ObservationCountsSchema.parse({}) };
+    }
+  } catch (err) {
+    logBackboardWarn("queryTasteProfile failed", { user_id: sanitizeUserId(userId), ...errorToLogMeta(err) });
+  }
+  return null;
+};
+
 // Bayesian running average: dampens new signals as observations accumulate
 const updateConfidence = (
   existingScore: number,
@@ -173,6 +304,7 @@ export const getOrInitSession = (userId: string): SessionState => {
     recent_dwells: [],
     session_rejections: [],
     dwell_count: 0,
+    seen_product_names: new Set(),
   };
   sessionCache.set(userId, fresh);
   logBackboardInfo("Session initialized", {
@@ -186,37 +318,6 @@ export const getSession = (userId: string): SessionState => getOrInitSession(use
 
 // ---- Backboard fetch / store ----
 
-const migrateOldProfile = (old: Record<string, unknown>): StoredProfile => {
-  const styles: Record<string, number> = {};
-  const colors: Record<string, number> = {};
-  const brands: Record<string, number> = {};
-
-  if (Array.isArray(old.preferred_styles)) {
-    for (const s of old.preferred_styles as string[]) {
-      if (s) styles[s] = 0.5;
-    }
-  }
-  if (Array.isArray(old.preferred_colors)) {
-    for (const c of old.preferred_colors as string[]) {
-      if (c) colors[c] = 0.5;
-    }
-  }
-  if (Array.isArray(old.preferred_brands)) {
-    for (const b of old.preferred_brands as string[]) {
-      if (b) brands[b] = 0.5;
-    }
-  }
-
-  return {
-    persistent: PersistentProfileSchema.parse({
-      preferred_styles: styles,
-      preferred_colors: colors,
-      preferred_brands: brands,
-    }),
-    observations: ObservationCountsSchema.parse({}),
-  };
-};
-
 export const getStoredProfile = async (userId: string): Promise<StoredProfile> => {
   const safeUserId = sanitizeUserId(userId);
   const cached = storedProfileCache.get(userId);
@@ -229,81 +330,21 @@ export const getStoredProfile = async (userId: string): Promise<StoredProfile> =
     return cached;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BACKBOARD_TIMEOUT_MS);
-  const startedAt = Date.now();
-  const endpoint = `${settings.BACKBOARD_BASE_URL}/memory/itrack:profile:${userId}`;
+  logBackboardInfo("Profile cache miss; querying Backboard memory", { user_id: safeUserId });
 
-  logBackboardInfo("Profile cache miss; fetching from Backboard", {
-    user_id: safeUserId,
-    endpoint,
-    timeout_ms: BACKBOARD_TIMEOUT_MS,
-  });
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "GET",
-      headers: authHeaders(),
-      signal: controller.signal,
-    });
-
-    logBackboardInfo("Backboard profile response received", {
+  const profile = await queryTasteProfile(userId);
+  if (profile) {
+    storedProfileCache.set(userId, profile);
+    logBackboardInfo("Restored profile from Backboard memory", {
       user_id: safeUserId,
-      status: response.status,
-      ok: response.ok,
-      duration_ms: Date.now() - startedAt,
+      summary: summarizeProfile(profile),
     });
-
-    if (response.status === 200) {
-      const data: unknown = await response.json();
-      const raw =
-        typeof data === "object" && data !== null && "value" in data
-          ? (data as { value: unknown }).value
-          : data;
-
-      const parsed = StoredProfileSchema.safeParse(raw);
-      if (parsed.success) {
-        storedProfileCache.set(userId, parsed.data);
-        logBackboardInfo("Loaded profile from Backboard (stored format)", {
-          user_id: safeUserId,
-          summary: summarizeProfile(parsed.data),
-        });
-        return parsed.data;
-      }
-
-      const maybeOld = raw as Record<string, unknown> | null;
-      if (maybeOld && Array.isArray(maybeOld.preferred_styles)) {
-        const migrated = migrateOldProfile(maybeOld);
-        storedProfileCache.set(userId, migrated);
-        logBackboardInfo("Loaded profile from Backboard (legacy migrated format)", {
-          user_id: safeUserId,
-          summary: summarizeProfile(migrated),
-        });
-        return migrated;
-      }
-
-      logBackboardWarn("Backboard profile payload format unrecognized; using defaults", {
-        user_id: safeUserId,
-      });
-    } else {
-      logBackboardWarn("Backboard profile fetch returned non-200 status", {
-        user_id: safeUserId,
-        status: response.status,
-      });
-    }
-  } catch (error) {
-    logBackboardWarn("Backboard profile fetch failed; using defaults", {
-      user_id: safeUserId,
-      duration_ms: Date.now() - startedAt,
-      ...errorToLogMeta(error),
-    });
-  } finally {
-    clearTimeout(timeout);
+    return profile;
   }
 
   const empty = makeDefaultProfile();
   storedProfileCache.set(userId, empty);
-  logBackboardInfo("Using default in-memory profile", {
+  logBackboardInfo("Using default profile (no Backboard memory yet)", {
     user_id: safeUserId,
     summary: summarizeProfile(empty),
   });
@@ -312,77 +353,6 @@ export const getStoredProfile = async (userId: string): Promise<StoredProfile> =
 
 // Legacy alias used by other modules that imported getProfile
 export const getProfile = getStoredProfile;
-
-const persistProfile = async (userId: string, profile: StoredProfile): Promise<void> => {
-  storedProfileCache.set(userId, profile);
-
-  const safeUserId = sanitizeUserId(userId);
-  const endpoint = `${settings.BACKBOARD_BASE_URL}/memory/itrack:profile:${userId}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BACKBOARD_TIMEOUT_MS);
-  const startedAt = Date.now();
-
-  logBackboardInfo("Persisting profile to Backboard", {
-    user_id: safeUserId,
-    endpoint,
-    timeout_ms: BACKBOARD_TIMEOUT_MS,
-    summary: summarizeProfile(profile),
-  });
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(profile),
-      signal: controller.signal,
-    });
-
-    const durationMs = Date.now() - startedAt;
-    if (!response.ok) {
-      let bodyText = "";
-      try {
-        bodyText = await response.text();
-      } catch {
-        bodyText = "";
-      }
-
-      logBackboardWarn("Backboard profile persist returned non-2xx status", {
-        user_id: safeUserId,
-        status: response.status,
-        duration_ms: durationMs,
-        body_preview: bodyText.slice(0, 500),
-      });
-    } else {
-      logBackboardInfo("Backboard profile persisted", {
-        user_id: safeUserId,
-        status: response.status,
-        duration_ms: durationMs,
-      });
-    }
-  } catch (error) {
-    const isNetworkError =
-      error instanceof TypeError &&
-      typeof (error as { cause?: { code?: unknown } }).cause?.code === "string" &&
-      BACKBOARD_NETWORK_ERROR_CODES.has((error as { cause: { code: string } }).cause.code);
-
-    if (isNetworkError) {
-      const code = (error as { cause: { code: string } }).cause.code;
-      logBackboardWarn("Cannot reach Backboard; profile saved in-memory only", {
-        user_id: safeUserId,
-        code,
-        duration_ms: Date.now() - startedAt,
-      });
-    } else {
-      logBackboardWarn("persistProfile write failed", {
-        user_id: safeUserId,
-        duration_ms: Date.now() - startedAt,
-        ...errorToLogMeta(error),
-      });
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
-};
 
 // ---- Confidence-weighted profile update from dwell ----
 
@@ -478,7 +448,36 @@ export const updateProfile = async (
     },
   };
 
-  await persistProfile(userId, merged);
+  // Update local cache for in-session recommendation performance
+  storedProfileCache.set(userId, merged);
+
+  // Post natural language observation to Backboard — its LLM extracts and stores taste signals
+  const styleDesc = signals.style_signals
+    .filter((s) => s.label && s.label.toLowerCase() !== "unknown")
+    .map((s) => `${s.label} (${(s.strength * 100).toFixed(0)}% confidence)`)
+    .join(", ");
+  const colorDesc = signals.color_signals
+    .filter((c) => c.label && c.label.toLowerCase() !== "unknown")
+    .map((c) => `${c.label} (${(c.strength * 100).toFixed(0)}% confidence)`)
+    .join(", ");
+  const brandDesc =
+    signals.brand_guess && signals.brand_guess.toLowerCase() !== "unknown"
+      ? `${signals.brand_guess} (${(signals.brand_strength * 100).toFixed(0)}% confidence)`
+      : null;
+  const priceDesc =
+    signals.estimated_price_min >= 0
+      ? `$${signals.estimated_price_min}–$${signals.estimated_price_max}`
+      : null;
+  const observation = [
+    `User gazed at: "${signals.product_name}" (${signals.product_category})`,
+    styleDesc ? `Styles: ${styleDesc}` : null,
+    colorDesc ? `Colors: ${colorDesc}` : null,
+    brandDesc ? `Brand: ${brandDesc}` : null,
+    priceDesc ? `Price range: ${priceDesc}` : null,
+  ]
+    .filter(Boolean)
+    .join(". ");
+  logObservation(userId, observation);
 
   // Record in session
   const session = getOrInitSession(userId);
@@ -558,7 +557,22 @@ export const recordSkip = async (userId: string, event: SkipEvent): Promise<void
     observations: { ...obs, rejected_styles: rejStylesObs, rejected_brands: rejBrandsObs },
   };
 
-  await persistProfile(userId, merged);
+  // Update local cache
+  storedProfileCache.set(userId, merged);
+
+  // Post skip observation to Backboard memory
+  const skipParts = [
+    `User scrolled past (skipped): "${event.product_name}"`,
+    event.style_signals.filter((l) => l.toLowerCase() !== "unknown").length > 0
+      ? `Negative style signals (did NOT interest user): ${event.style_signals.filter((l) => l.toLowerCase() !== "unknown").join(", ")}`
+      : null,
+    event.brand && event.brand.toLowerCase() !== "unknown"
+      ? `Brand did not interest user: ${event.brand}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(". ");
+  logObservation(userId, skipParts);
 
   // Add to session rejections for query exclusion within this session
   const session = getOrInitSession(userId);

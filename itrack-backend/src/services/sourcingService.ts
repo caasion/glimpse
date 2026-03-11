@@ -5,6 +5,59 @@ import { getProfileConfidence } from "../services/backboardService.js";
 import { uploadScreenshotForLens } from "./cloudinaryService.js";
 import { getJson } from "serpapi";
 
+// Only allow links to known ecommerce/retail domains. Falls back to "#" for
+// anything that looks like a content site (Reddit, Pinterest, YouTube, etc.).
+const ECOMMERCE_DOMAINS = [
+  "amazon.",
+  "ebay.",
+  "etsy.",
+  "walmart.",
+  "target.",
+  "bestbuy.",
+  "shopify.",
+  "myshopify.",
+  "nike.",
+  "adidas.",
+  "zara.",
+  "hm.",
+  "uniqlo.",
+  "nordstrom.",
+  "macys.",
+  "gap.",
+  "asos.",
+  "farfetch.",
+  "net-a-porter.",
+  "ssense.",
+  "lululemon.",
+  "patagonia.",
+  "drmartens.",
+  "vans.",
+  "converse.",
+  "newbalance.",
+  "reebok.",
+  "puma.",
+  "underarmour.",
+  "levi.",
+  "forever21.",
+  "urbanoutfitters.",
+  "anthropologie.",
+  "freepeople.",
+  "revolve.",
+  "zaful.",
+  "shein.",
+  "shop.",
+];
+
+const toEcommerceUrl = (url: unknown): string => {
+  if (typeof url !== "string" || !url.startsWith("http")) return "#";
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return ECOMMERCE_DOMAINS.some((domain) => hostname.includes(domain)) ? url : "#";
+  } catch {
+    return "#";
+  }
+};
+
 type CatalogEntry = {
   name: string;
   price: string;
@@ -186,10 +239,10 @@ const toProduct = (
 export const sourceCat1 = async (
   screenshotB64: string,
   screenshotUrl?: string,
-): Promise<ProductCandidate> => {
+): Promise<ProductCandidate | null> => {
   if (settings.PRODUCT_SOURCING_MODE === "hardcoded") {
-    console.info("[Sourcing][Cat1] Hardcoded mode enabled; returning catalog fallback");
-    return toProduct(HARDCODED_CATALOG[0], "hardcoded");
+    console.info("[Sourcing][Cat1] Hardcoded mode enabled; no catalog fallback");
+    return null;
   }
 
   let fallbackReason = "unknown";
@@ -234,7 +287,7 @@ export const sourceCat1 = async (
               ? (top.price as { value: string }).value
               : "See site",
           image_url: typeof top.thumbnail === "string" ? top.thumbnail : "",
-          buy_url: typeof top.link === "string" ? top.link : "#",
+          buy_url: toEcommerceUrl(top.link),
           source: "serpapi_lens",
         };
       }
@@ -254,8 +307,8 @@ export const sourceCat1 = async (
     }
   }
 
-  console.warn(`[Sourcing][Cat1] Returning hardcoded fallback (reason=${fallbackReason})`);
-  return toProduct(HARDCODED_CATALOG[0], "hardcoded");
+  console.warn(`[Sourcing][Cat1] No result available (reason=${fallbackReason}); returning null`);
+  return null;
 };
 
 export const sourceCat2 = async (
@@ -269,25 +322,13 @@ export const sourceCat2 = async (
   const topBrand = signals.brand_guess;
 
   if (settings.PRODUCT_SOURCING_MODE === "hardcoded") {
-    console.info("[Sourcing][Cat2] Hardcoded mode enabled; returning catalog fallback picks");
-    const scored = HARDCODED_CATALOG.map((candidate) => ({
-      candidate,
-      score: scoreCandidate(candidate, signals),
-    })).sort((a, b) => b.score - a.score);
-    return scored.slice(0, 3).map(({ candidate }, i) =>
-      toProduct(candidate, "hardcoded", baseConfidence * (1 - 0.05 * i)),
-    );
+    console.info("[Sourcing][Cat2] Hardcoded mode enabled; no catalog fallback picks");
+    return [];
   }
 
   if (!query) {
-    console.warn("[Sourcing][Cat2] Empty query from profile; returning hardcoded fallback picks");
-    const scored = HARDCODED_CATALOG.map((candidate) => ({
-      candidate,
-      score: scoreCandidate(candidate, signals),
-    })).sort((a, b) => b.score - a.score);
-    return scored.slice(0, 3).map(({ candidate }, i) =>
-      toProduct(candidate, "hardcoded", baseConfidence * (1 - 0.05 * i)),
-    );
+    console.warn("[Sourcing][Cat2] Empty query from profile; returning empty picks");
+    return [];
   }
 
   console.info(`[Sourcing][Cat2] Live shopping query: ${query}`);
@@ -310,12 +351,9 @@ export const sourceCat2 = async (
         name: typeof item.title === "string" ? item.title : "Unknown Product",
         price: typeof item.price === "string" ? item.price : "See site",
         image_url: typeof item.thumbnail === "string" ? item.thumbnail : "",
-        buy_url:
-          typeof item.product_link === "string"
-            ? item.product_link
-            : typeof item.link === "string"
-              ? item.link
-              : "#",
+        buy_url: toEcommerceUrl(
+          typeof item.product_link === "string" ? item.product_link : item.link,
+        ),
         source: "serpapi_shopping" as const,
         confidence: baseConfidence * (1 - 0.05 * i),
         style_signals: topStyles,
@@ -340,12 +378,6 @@ export const sourceCat2 = async (
     }
   }
 
-  console.warn(`[Sourcing][Cat2] Returning hardcoded fallback picks (reason=${fallbackReason})`);
-  const scored = HARDCODED_CATALOG.map((candidate) => ({
-    candidate,
-    score: scoreCandidate(candidate, signals),
-  })).sort((a, b) => b.score - a.score);
-  return scored.slice(0, 3).map(({ candidate }, i) =>
-    toProduct(candidate, "hardcoded", baseConfidence * (1 - 0.05 * i)),
-  );
+  console.warn(`[Sourcing][Cat2] No results available (reason=${fallbackReason}); returning empty picks`);
+  return [];
 };

@@ -50,7 +50,7 @@ const dwellRoutes: FastifyPluginAsync = async (fastify) => {
               fastify.log.warn({ err: error }, "[Pipeline] Gemini identify/update failed");
             });
 
-    let cat1Product: ProductCandidate;
+    let cat1Product: ProductCandidate | null;
     let cat2Picks: ProductCandidate[];
 
     try {
@@ -63,7 +63,12 @@ const dwellRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     fastify.log.info("[Pipeline] Transforming product images in parallel");
-    const allProducts = [cat1Product, ...cat2Picks];
+    // Deduplicate taste_picks against products already shown this session
+    const session = backboardService.getSession(event.user_id);
+    cat2Picks = cat2Picks.filter((p) => !session.seen_product_names.has(p.name));
+    const allProducts = [...(cat1Product ? [cat1Product] : []), ...cat2Picks];
+    // Record all returned products as seen
+    for (const p of allProducts) session.seen_product_names.add(p.name);
     const urls = await Promise.all(
       allProducts.map((product) => cloudinaryService.transformProductImage(product.image_url)),
     );
